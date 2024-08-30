@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Tabela e Gráfico de Frequências de Vento em KT</title>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/highcharts-more.js"></script>
+    <script src="https://code.highcharts.com/modules/data.js"></script>
+    <script src="https://code.highcharts.com/modules/exporting.js"></script>
+    <script src="https://code.highcharts.com/modules/export-data.js"></script>
+    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial, sans-serif';
+        }
+
+        .header {
+            background-color: #4CAF50;
+            color: white;
+            text-align: center;
+            padding: 15px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .flex-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 20px;
+        }
+
+        .flex-container>div,
+        .flex-container>table {
+            width: 48%;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+        }
+
+        table {
+            width: 50%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: center;
+        }
+
+        .hdr {
+            background-color: #CCCCFF;
+        }
+
+        .totals {
+            font-weight: bold;
+        }
+
+        #container {
+            width: 50%;
+            height: 500px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        Frequência de Direção e Velocidade do Vento
+    </div>
+    <h5>Carregar Arquivo .csv</h5>
+    <input type="file" id="fileInput" accept=".csv" style="margin: 20px; display: block;">
+
+    <div class="flex-container">
+        <table id="freq" border="0" cellspacing="0" cellpadding="0">
+            <tr nowrap bgcolor="#CCCCFF">
+                <th colspan="9" class="hdr">Tabela de Frequências (percentual)</th>
+            </tr>
+            <tr nowrap bgcolor="#CCCCFF">
+                <th class="freq">Direção</th>
+                <th class="freq">00 - 05 kt</th>
+                <th class="freq">05 - 10 kt</th>
+                <th class="freq">10 - 15 kt</th>
+                <th class="freq">15 - 20 kt</th>
+                <th class="freq">20 - 25 kt</th>
+                <th class="freq">25 - 30 kt</th>
+                <th class="freq">> 30 kt</th>
+                <th class="freq">Total</th>
+            </tr>
+            <!-- Linhas de dados serão adicionadas aqui pelo JavaScript -->
+        </table>
+
+        <div id="container"></div>
+    </div>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function (event) {
+            const file = event.target.files[0];
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                complete: function (results) {
+                    const directions = results.data.map(row => row['Direção do Vento']);
+                    const speeds = results.data.map(row => row['Velocidade do Vento']);
+                    const frequencyData = calcularFrequencias(directions, speeds);
+                    preencherTabela(frequencyData);
+                    plotarGrafico(frequencyData);
+                }
+            });
+        });
+
+        // Função para converter graus em categorias de direção
+        function converterDirecaoSubcolaterais(degrees) {
+            if (degrees === 'VRB') return null; // Ignorar direções VRB
+            if (degrees >= 348.75 || degrees < 11.25) return 'N';
+            if (degrees >= 11.25 && degrees < 33.75) return 'NNE';
+            if (degrees >= 33.75 && degrees < 56.25) return 'NE';
+            if (degrees >= 56.25 && degrees < 78.75) return 'ENE';
+            if (degrees >= 78.75 && degrees < 101.25) return 'E';
+            if (degrees >= 101.25 && degrees < 123.75) return 'ESE';
+            if (degrees >= 123.75 && degrees < 146.25) return 'SE';
+            if (degrees >= 146.25 && degrees < 168.75) return 'SSE';
+            if (degrees >= 168.75 && degrees < 191.25) return 'S';
+            if (degrees >= 191.25 && degrees < 213.75) return 'SSW';
+            if (degrees >= 213.75 && degrees < 236.25) return 'SW';
+            if (degrees >= 236.25 && degrees < 258.75) return 'WSW';
+            if (degrees >= 258.75 && degrees < 281.25) return 'W';
+            if (degrees >= 281.25 && degrees < 303.75) return 'WNW';
+            if (degrees >= 303.75 && degrees < 326.25) return 'NW';
+            if (degrees >= 326.25 && degrees < 348.75) return 'NNW';
+            return null; // Caso não se encaixe
+        }
+
+        function converterDirecaoColaterais(degrees) {
+            if (degrees === 'VRB') return null; // Ignorar direções VRB
+            if (degrees >= 340 || degrees < 30) return 'N';
+            if (degrees >= 30 && degrees < 70) return 'NE';
+            if (degrees >= 70 && degrees < 120) return 'E';
+            if (degrees >= 120 && degrees < 160) return 'SE';
+            if (degrees >= 160 && degrees < 210) return 'S';
+            if (degrees >= 210 && degrees < 250) return 'SW';
+            if (degrees >= 250 && degrees < 300) return 'W';
+            if (degrees >= 300 && degrees < 340) return 'NW';
+            return null; // Caso não se encaixe
+        }
+
+        // Função para calcular frequências de vento em diferentes intervalos de velocidade
+        function calcularFrequencias(directions, speeds) {
+            const freqDataSubcolaterais = {
+                'N': [0, 0, 0, 0, 0, 0, 0, 0],
+                'NNE': [0, 0, 0, 0, 0, 0, 0, 0],
+                'NE': [0, 0, 0, 0, 0, 0, 0, 0],
+                'ENE': [0, 0, 0, 0, 0, 0, 0, 0],
+                'E': [0, 0, 0, 0, 0, 0, 0, 0],
+                'ESE': [0, 0, 0, 0, 0, 0, 0, 0],
+                'SE': [0, 0, 0, 0, 0, 0, 0, 0],
+                'SSE': [0, 0, 0, 0, 0, 0, 0, 0],
+                'S': [0, 0, 0, 0, 0, 0, 0, 0],
+                'SSW': [0, 0, 0, 0, 0, 0, 0, 0],
+                'SW': [0, 0, 0, 0, 0, 0, 0, 0],
+                'WSW': [0, 0, 0, 0, 0, 0, 0, 0],
+                'W': [0, 0, 0, 0, 0, 0, 0, 0],
+                'WNW': [0, 0, 0, 0, 0, 0, 0, 0],
+                'NW': [0, 0, 0, 0, 0, 0, 0, 0],
+                'NNW': [0, 0, 0, 0, 0, 0, 0, 0]
+            };
+
+            const freqDataColaterais = {
+                'N': [0, 0, 0, 0, 0, 0, 0, 0],
+                'NE': [0, 0, 0, 0, 0, 0, 0, 0],
+                'E': [0, 0, 0, 0, 0, 0, 0, 0],
+                'SE': [0, 0, 0, 0, 0, 0, 0, 0],
+                'S': [0, 0, 0, 0, 0, 0, 0, 0],
+                'SW': [0, 0, 0, 0, 0, 0, 0, 0],
+                'W': [0, 0, 0, 0, 0, 0, 0, 0],
+                'NW': [0, 0, 0, 0, 0, 0, 0, 0],
+            };
+
+            directions.forEach((direction, index) => {
+                const dirCategory = converterDirecaoColaterais(direction);
+                if (dirCategory === null) return; // Ignorar direções VRB
+
+                const speed = speeds[index];
+                if (speed < 6) freqDataColaterais[dirCategory][0]++;
+                else if (speed < 11) freqDataColaterais[dirCategory][1]++;
+                else if (speed < 16) freqDataColaterais[dirCategory][2]++;
+                else if (speed < 21) freqDataColaterais[dirCategory][3]++;
+                else if (speed < 26) freqDataColaterais[dirCategory][4]++;
+                else if (speed < 31) freqDataColaterais[dirCategory][5]++;
+                else freqDataColaterais[dirCategory][6]++;
+                freqDataColaterais[dirCategory][7]++;
+            });
+
+            return freqDataColaterais;
+        }
+
+        // Função para preencher a tabela HTML com dados de frequências e calcular os totais
+        function preencherTabela(frequencyData) {
+            const table = document.getElementById('freq');
+            const directions = Object.keys(frequencyData);
+            const totals = [0, 0, 0, 0, 0, 0, 0, 0]; // Inicializar totais
+
+            directions.forEach((dir, index) => {
+                const row = table.insertRow();
+                if (index % 2 === 1) {
+                    row.style.backgroundColor = '#DDDDDD';
+                }
+                const cellDir = row.insertCell(0);
+                cellDir.className = 'dir';
+                cellDir.textContent = dir;
+
+                let total = 0;
+                for (let i = 0; i < 7; i++) {
+                    const cell = row.insertCell(i + 1);
+                    cell.className = 'data';
+                    const freq = frequencyData[dir][i];
+                    total += freq;
+                    totals[i] += freq; // Adiciona ao total da coluna
+                    cell.textContent = freq.toFixed(2);
+                }
+
+                const cellTotal = row.insertCell(8);
+                cellTotal.className = 'data';
+                cellTotal.textContent = total.toFixed(2);
+                totals[7] += total; // Adiciona ao total geral
+            });
+
+            // Adicionar linha de totais gerais
+            const totalRow = table.insertRow();
+            const cellTotalDir = totalRow.insertCell(0);
+            cellTotalDir.className = 'totals';
+            cellTotalDir.textContent = 'Total';
+
+            for (let i = 0; i < totals.length; i++) {
+                const cellTotal = totalRow.insertCell(i + 1);
+                cellTotal.className = 'totals';
+                cellTotal.textContent = totals[i].toFixed(2);
+            }
+        }
+
+        // Função para plotar o gráfico usando os dados de frequência
+        function plotarGrafico(frequencyData) {
+            /*const categories = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+            const seriesData = categories.map(dir => ({
+                name: dir,
+                data: frequencyData[dir].slice(0, 7) // Excluindo o total
+            }));
+            */
+            Highcharts.chart('container', {
+                data: {
+                    table: 'freq',
+                    startRow: 1,
+                    endRow: 9,
+                    endColumn: 7
+                },
+                chart: {
+                    polar: true,
+                    type: 'column'
+                },
+                title: {
+                    text: ' Frequência de Direção e Velocidade do Vento ',
+                    style: {
+                        fontFamily: 'Arial, sans-serif',
+                        fontSize: '24px',
+                        color: '#333'
+                    }
+                },
+                pane: {
+                    size: '85%'
+                },
+                xAxis: {
+                    tickmarkPlacement: 'on'
+                },
+                yAxis: {
+                    min: 0,
+                    endOnTick: false,
+                    showLastLabel: true,
+                    title: {
+                        text: ''
+                    },
+                    labels: {
+                        //format: '{value}%'
+                        format: ' '
+                    },
+
+                    reversedStacks: false
+                },
+                tooltip: {
+                    pointFormat: 'Direção: <b>{series.name}</b><br/>Frequência: <b>{point.y}</b>'
+                },
+                plotOptions: {
+                    series: {
+                        stacking: 'normal',
+                        shadow: false,
+                        groupPadding: 0,
+                        pointPlacement: 'on'
+                    }
+                },
+                legend: {
+                    align: 'right',
+                    verticalAlign: 'top',
+                    y: 100,
+                    x: -100,
+                    layout: 'vertical'
+                }
+
+            });
+
+        }
+    </script>
+
+</body>
+
+</html>
